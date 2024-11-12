@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "arm_math.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,8 +43,6 @@
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c2;
 
-TIM_HandleTypeDef htim2;
-
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
@@ -55,8 +54,11 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_USART1_UART_Init(void);
-static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
+
+void readSensors();
+void printOne(char* string, float data);
+void printThree(char* string, int data1, int data2, int data3);
 
 /* USER CODE END PFP */
 
@@ -103,10 +105,10 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C2_Init();
   MX_USART1_UART_Init();
-  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
-  /* Initialize the peripherals */
+  /* Initialize the sensor peripherals */
+
   BSP_HSENSOR_Init();
   BSP_MAGNETO_Init();
   BSP_ACCELERO_Init();
@@ -121,6 +123,10 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  readSensors();
+	  HAL_Delay(100); // 100 ms; 10 Hz sampling rate
+
+
   }
   /* USER CODE END 3 */
 }
@@ -224,51 +230,6 @@ static void MX_I2C2_Init(void)
 }
 
 /**
-  * @brief TIM2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM2_Init(void)
-{
-
-  /* USER CODE BEGIN TIM2_Init 0 */
-
-  /* USER CODE END TIM2_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM2_Init 1 */
-
-  /* USER CODE END TIM2_Init 1 */
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 0;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 4294967295;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM2_Init 2 */
-
-  /* USER CODE END TIM2_Init 2 */
-
-}
-
-/**
   * @brief USART1 Initialization Function
   * @param None
   * @retval None
@@ -335,17 +296,32 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-/* Set up Timer interrupts */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef * htim) {
-	if (htim == &htim2) {
-		humidity = BSP_HSENSOR_ReadHumidity();
-		BSP_MAGNETO_GetXYZ(magneticfield);
-		BSP_ACCELERO_AccGetXYZ(acceleration);
-		pressure = BSP_PSENSOR_ReadPressure();
+void printOne(char* string, float data) {
+	char output[120];
+	sprintf(output, string, data);
+	uint16_t len = strlen(output);
+	HAL_UART_Transmit(&huart1, (uint8_t *)output, len, 120);
+}
+
+void printThree(char* string, int data1, int data2, int data3) {
+	char output[120];
+	sprintf(output, string, data1, data2, data3);
+	uint16_t len = strlen(output);
+	HAL_UART_Transmit(&huart1, (uint8_t *)output, len, 120);
+}
 
 
+/* Read sensor and print values */
+void readSensors() {
+	humidity = BSP_HSENSOR_ReadHumidity();
+	BSP_MAGNETO_GetXYZ(magneticfield);
+	BSP_ACCELERO_AccGetXYZ(acceleration);
+	pressure = BSP_PSENSOR_ReadPressure();
 
-	}
+	printOne("Humidity: %f", humidity);
+	printThree("Magnetic Field X, Y, Z Coordinate: %d, %d, %d", magneticfield[0], magneticfield[1], magneticfield[2]);
+	printThree("Acceleration X, Y, Z Coordinate: %d, %d, %d", acceleration[0], acceleration[1], acceleration[2]);
+	printOne("Pressure: %f", pressure);
 }
 
 /* USER CODE END 4 */

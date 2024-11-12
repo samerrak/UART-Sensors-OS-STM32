@@ -28,6 +28,12 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32l4xx_hal.h"
+#include "stm32l4s5i_iot01_accelero.h";
+#include "stm32l4s5i_iot01_tsensor.h";
+#include "stm32l4s5i_iot01_psensor.h";
+#include "stm32l4s5i_iot01_gyro.h";
+#include "stm32l4s5i_iot01_magneto.h";
+#include "stm32l4s5i_iot01_hsensor.h";
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
