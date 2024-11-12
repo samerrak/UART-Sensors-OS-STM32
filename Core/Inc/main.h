@@ -28,15 +28,16 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32l4xx_hal.h"
-#include "stm32l4s5i_iot01_accelero.h";
-#include "stm32l4s5i_iot01_tsensor.h";
-#include "stm32l4s5i_iot01_psensor.h";
-#include "stm32l4s5i_iot01_gyro.h";
-#include "stm32l4s5i_iot01_magneto.h";
-#include "stm32l4s5i_iot01_hsensor.h";
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "stm32l4xx_hal.h"
+#include "stm32l4s5i_iot01_accelero.h"
+#include "stm32l4s5i_iot01_tsensor.h"
+#include "stm32l4s5i_iot01_psensor.h"
+#include "stm32l4s5i_iot01_gyro.h"
+#include "stm32l4s5i_iot01_magneto.h"
+#include "stm32l4s5i_iot01_hsensor.h"
 
 /* USER CODE END Includes */
 
@@ -63,6 +64,11 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define myButton_Pin GPIO_PIN_13
+#define myButton_GPIO_Port GPIOC
+#define myButton_EXTI_IRQn EXTI15_10_IRQn
+#define myLed1_Pin GPIO_PIN_14
+#define myLed1_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

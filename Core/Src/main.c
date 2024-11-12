@@ -59,7 +59,6 @@ static void MX_USART1_UART_Init(void);
 void readSensors();
 void printOne(char* string, float data);
 void printThree(char* string, int data1, int data2, int data3);
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -68,9 +67,12 @@ void printThree(char* string, int data1, int data2, int data3);
 /* Global variables for sensor measurements */
 
 float humidity;
-uint16_t magneticfield[3];
-uint16_t acceleration[3];
+int16_t magneticfield[3];
+int16_t acceleration[3];
 float pressure;
+
+/* mode = 0 (humidity); mode = 1 (magnetic field); mode = 2 (acceleration); mode = 3 (pressure) */
+int mode;
 
 /* USER CODE END 0 */
 
@@ -114,6 +116,8 @@ int main(void)
   BSP_ACCELERO_Init();
   BSP_PSENSOR_Init();
 
+  mode = 0;
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -121,10 +125,10 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
 	  readSensors();
-	  HAL_Delay(100); // 100 ms; 10 Hz sampling rate
+	  HAL_Delay(100);
+    /* USER CODE BEGIN 3 */
+
 
 
   }
@@ -284,11 +288,33 @@ static void MX_USART1_UART_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 /* USER CODE BEGIN MX_GPIO_Init_1 */
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(myLed1_GPIO_Port, myLed1_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : myButton_Pin */
+  GPIO_InitStruct.Pin = myButton_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(myButton_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : myLed1_Pin */
+  GPIO_InitStruct.Pin = myLed1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(myLed1_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -304,25 +330,37 @@ void printOne(char* string, float data) {
 }
 
 void printThree(char* string, int data1, int data2, int data3) {
-	char output[120];
+	char output[60];
 	sprintf(output, string, data1, data2, data3);
 	uint16_t len = strlen(output);
 	HAL_UART_Transmit(&huart1, (uint8_t *)output, len, 120);
 }
-
-
 /* Read sensor and print values */
 void readSensors() {
-	humidity = BSP_HSENSOR_ReadHumidity();
-	BSP_MAGNETO_GetXYZ(magneticfield);
-	BSP_ACCELERO_AccGetXYZ(acceleration);
-	pressure = BSP_PSENSOR_ReadPressure();
-
-	printOne("Humidity: %f", humidity);
-	printThree("Magnetic Field X, Y, Z Coordinate: %d, %d, %d", magneticfield[0], magneticfield[1], magneticfield[2]);
-	printThree("Acceleration X, Y, Z Coordinate: %d, %d, %d", acceleration[0], acceleration[1], acceleration[2]);
-	printOne("Pressure: %f", pressure);
+	if (mode == 0) {
+		humidity = BSP_HSENSOR_ReadHumidity();
+		printOne("Humidity: %f\n\r", humidity);
+	}
+	else if (mode == 1) {
+		BSP_MAGNETO_GetXYZ(magneticfield);
+		printThree("Magnetic Field X, Y, Z Coordinate: %d, %d, %d\n\r", magneticfield[0], magneticfield[1], magneticfield[2]);
+	}
+	else if (mode == 2) {
+		BSP_ACCELERO_AccGetXYZ(acceleration);
+		printThree("Acceleration X, Y, Z Coordinate: %d, %d, %d\n\r", acceleration[0], acceleration[1], acceleration[2]);
+	}
+	else {
+		pressure = BSP_PSENSOR_ReadPressure();
+		printOne("Pressure: %f\n\r", pressure);
+	}
 }
+
+void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin) {
+	if (GPIO_Pin == myButton_Pin) {
+		mode = ((mode+1) % 4);
+	}
+}
+
 
 /* USER CODE END 4 */
 
