@@ -46,7 +46,9 @@ I2C_HandleTypeDef hi2c2;
 
 UART_HandleTypeDef huart1;
 
-osThreadId defaultTaskHandle;
+osThreadId readSensorHandle;
+osThreadId buttonCheckHandle;
+osThreadId printUARTHandle;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -57,6 +59,8 @@ static void MX_GPIO_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_USART1_UART_Init(void);
 void StartDefaultTask(void const * argument);
+void StartTask02(void const * argument);
+void StartTask03(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -76,7 +80,7 @@ int16_t acceleration[3];
 float pressure;
 
 /* mode = 0 (humidity); mode = 1 (magnetic field); mode = 2 (acceleration); mode = 3 (pressure) */
-volatile int mode;
+int mode;
 
 /* USER CODE END 0 */
 
@@ -141,9 +145,17 @@ int main(void)
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 256);
-  defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+  /* definition and creation of readSensor */
+  osThreadDef(readSensor, StartDefaultTask, osPriorityNormal, 0, 256);
+  readSensorHandle = osThreadCreate(osThread(readSensor), NULL);
+
+  /* definition and creation of buttonCheck */
+  osThreadDef(buttonCheck, StartTask02, osPriorityHigh, 0, 128);
+  buttonCheckHandle = osThreadCreate(osThread(buttonCheck), NULL);
+
+  /* definition and creation of printUART */
+  osThreadDef(printUART, StartTask03, osPriorityLow, 0, 256);
+  printUARTHandle = osThreadCreate(osThread(printUART), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -345,10 +357,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(myLed1_GPIO_Port, &GPIO_InitStruct);
 
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
@@ -368,31 +376,47 @@ void printThree(char* string, int data1, int data2, int data3) {
 	uint16_t len = strlen(output);
 	HAL_UART_Transmit(&huart1, (uint8_t *)output, len, 120);
 }
+
 /* Read sensor and print values */
 void readSensors() {
 	if (mode == 0) {
 		humidity = BSP_HSENSOR_ReadHumidity();
-		printOne("Humidity: %d\n\r", humidity);
 	}
 	else if (mode == 1) {
 		BSP_MAGNETO_GetXYZ(magneticfield);
-		printThree("Magnetic Field X, Y, Z Coordinate: %d, %d, %d\n\r", magneticfield[0], magneticfield[1], magneticfield[2]);
 	}
 	else if (mode == 2) {
 		BSP_ACCELERO_AccGetXYZ(acceleration);
-		printThree("Acceleration X, Y, Z Coordinate: %d, %d, %d\n\r", acceleration[0], acceleration[1], acceleration[2]);
 	}
 	else {
 		pressure = BSP_PSENSOR_ReadPressure();
-		printOne("Pressure: %d\n\r", pressure);
 	}
 }
 
-void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin) {
-	if (GPIO_Pin == myButton_Pin) {
+/* Function to printer sensor values */
+void printSensors() {
+	if (mode == 0) {
+			printOne("Humidity: %d\n\r", humidity);
+		}
+		else if (mode == 1) {
+			printThree("Magnetic Field X, Y, Z Coordinate: %d, %d, %d\n\r", magneticfield[0], magneticfield[1], magneticfield[2]);
+		}
+		else if (mode == 2) {
+			printThree("Acceleration X, Y, Z Coordinate: %d, %d, %d\n\r", acceleration[0], acceleration[1], acceleration[2]);
+		}
+		else {
+			printOne("Pressure: %d\n\r", pressure);
+	}
+
+}
+/* Read Button Using Polling */
+void readButton() {
+	int status = HAL_GPIO_ReadPin(myButton_GPIO_Port, myButton_Pin);
+	if (status == 0) {
 		mode = ((mode+1) % 4);
 	}
 }
+
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
 {
@@ -409,7 +433,7 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
 
 /* USER CODE BEGIN Header_StartDefaultTask */
 /**
-  * @brief  Function implementing the defaultTask thread.
+  * @brief  Function implementing the readSensor thread.
   * @param  argument: Not used
   * @retval None
   */
@@ -420,10 +444,48 @@ void StartDefaultTask(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-	osDelay(1);
+	osDelay(100);
 	readSensors();
   }
   /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_StartTask02 */
+/**
+* @brief Function implementing the buttonCheck thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTask02 */
+void StartTask02(void const * argument)
+{
+  /* USER CODE BEGIN StartTask02 */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(230);
+    readButton();
+  }
+  /* USER CODE END StartTask02 */
+}
+
+/* USER CODE BEGIN Header_StartTask03 */
+/**
+* @brief Function implementing the printUART thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTask03 */
+void StartTask03(void const * argument)
+{
+  /* USER CODE BEGIN StartTask03 */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(260);
+    printSensors();
+  }
+  /* USER CODE END StartTask03 */
 }
 
 /**

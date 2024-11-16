@@ -54,7 +54,7 @@
 #endif
 #define configENABLE_FPU                         0
 #define configENABLE_MPU                         0
-#define configCHECK_FOR_STACK_OVERFLOW 			 2
+
 #define configUSE_PREEMPTION                     1
 #define configSUPPORT_STATIC_ALLOCATION          1
 #define configSUPPORT_DYNAMIC_ALLOCATION         1
@@ -71,6 +71,8 @@
 #define configQUEUE_REGISTRY_SIZE                8
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION  1
 /* USER CODE BEGIN MESSAGE_BUFFER_LENGTH_TYPE */
+#define configCHECK_FOR_STACK_OVERFLOW 			 2
+
 /* Defaults to size_t for backward compatibility, but can be changed
    if lengths will always be less than the number of bytes in a size_t. */
 #define configMESSAGE_BUFFER_LENGTH_TYPE         size_t
