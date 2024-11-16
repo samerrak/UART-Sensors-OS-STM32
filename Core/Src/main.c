@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -45,6 +46,7 @@ I2C_HandleTypeDef hi2c2;
 
 UART_HandleTypeDef huart1;
 
+osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -54,6 +56,8 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_USART1_UART_Init(void);
+void StartDefaultTask(void const * argument);
+
 /* USER CODE BEGIN PFP */
 
 void readSensors();
@@ -72,7 +76,7 @@ int16_t acceleration[3];
 float pressure;
 
 /* mode = 0 (humidity); mode = 1 (magnetic field); mode = 2 (acceleration); mode = 3 (pressure) */
-int mode;
+volatile int mode;
 
 /* USER CODE END 0 */
 
@@ -120,13 +124,42 @@ int main(void)
 
   /* USER CODE END 2 */
 
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* definition and creation of defaultTask */
+  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 256);
+  defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
+
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
     /* USER CODE END WHILE */
-	  readSensors();
-	  HAL_Delay(100);
+
     /* USER CODE BEGIN 3 */
 
 
@@ -313,7 +346,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(myLed1_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
@@ -324,7 +357,7 @@ static void MX_GPIO_Init(void)
 
 void printOne(char* string, float data) {
 	char output[120];
-	sprintf(output, string, data);
+	sprintf(output, string, (int) data);
 	uint16_t len = strlen(output);
 	HAL_UART_Transmit(&huart1, (uint8_t *)output, len, 120);
 }
@@ -339,7 +372,7 @@ void printThree(char* string, int data1, int data2, int data3) {
 void readSensors() {
 	if (mode == 0) {
 		humidity = BSP_HSENSOR_ReadHumidity();
-		printOne("Humidity: %f\n\r", humidity);
+		printOne("Humidity: %d\n\r", humidity);
 	}
 	else if (mode == 1) {
 		BSP_MAGNETO_GetXYZ(magneticfield);
@@ -351,7 +384,7 @@ void readSensors() {
 	}
 	else {
 		pressure = BSP_PSENSOR_ReadPressure();
-		printOne("Pressure: %f\n\r", pressure);
+		printOne("Pressure: %d\n\r", pressure);
 	}
 }
 
@@ -361,8 +394,58 @@ void HAL_GPIO_EXTI_Callback (uint16_t GPIO_Pin) {
 	}
 }
 
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
+{
+    // Report stack overflow
+    printf("Stack overflow detected in task: %s\n", pcTaskName);
+
+    // Optionally halt the system for debugging
+    while (1);
+}
+
+
 
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_StartDefaultTask */
+/**
+  * @brief  Function implementing the defaultTask thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartDefaultTask */
+void StartDefaultTask(void const * argument)
+{
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
+  {
+	osDelay(1);
+	readSensors();
+  }
+  /* USER CODE END 5 */
+}
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
