@@ -72,6 +72,8 @@ void printThree(char* string, int data1, int data2, int data3);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+volatile uint8_t buttonPressed = 0;
+
 /* Global variables for sensor measurements */
 
 float humidity;
@@ -357,6 +359,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(myLed1_GPIO_Port, &GPIO_InitStruct);
 
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
@@ -409,11 +415,12 @@ void printSensors() {
 	}
 
 }
-/* Read Button Using Polling */
+
+/* Read Button Using Interrupt flag */
 void readButton() {
-	int status = HAL_GPIO_ReadPin(myButton_GPIO_Port, myButton_Pin);
-	if (status == 0) {
-		mode = ((mode+1) % 4);
+	if (buttonPressed) {
+		buttonPressed = 0; // Reset the flag
+		mode = (mode + 1) % 4; // Update the mode
 	}
 }
 
@@ -463,7 +470,7 @@ void StartTask02(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(230);
+    osDelay(400);
     readButton();
   }
   /* USER CODE END StartTask02 */
@@ -482,7 +489,7 @@ void StartTask03(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(260);
+    osDelay(200);
     printSensors();
   }
   /* USER CODE END StartTask03 */
@@ -507,6 +514,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE BEGIN Callback 1 */
 
   /* USER CODE END Callback 1 */
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+    if (GPIO_Pin == myButton_Pin) {
+        buttonPressed = 1; // Set the flag
+    }
 }
 
 /**
