@@ -18,10 +18,12 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "arm_math.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,10 +44,11 @@
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c2;
 
-TIM_HandleTypeDef htim2;
-
 UART_HandleTypeDef huart1;
 
+osThreadId readSensorHandle;
+osThreadId buttonCheckHandle;
+osThreadId printUARTHandle;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -55,20 +58,31 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_USART1_UART_Init(void);
-static void MX_TIM2_Init(void);
+void StartDefaultTask(void const * argument);
+void StartTask02(void const * argument);
+void StartTask03(void const * argument);
+
 /* USER CODE BEGIN PFP */
 
+void readSensors();
+void printOne(char* string, float data);
+void printThree(char* string, int data1, int data2, int data3);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+volatile uint8_t buttonPressed = 0;
+
 /* Global variables for sensor measurements */
 
 float humidity;
-uint16_t magneticfield[3];
-uint16_t acceleration[3];
+int16_t magneticfield[3];
+int16_t acceleration[3];
 float pressure;
+
+/* mode = 0 (humidity); mode = 1 (magnetic field); mode = 2 (acceleration); mode = 3 (pressure) */
+int mode;
 
 /* USER CODE END 0 */
 
@@ -103,16 +117,56 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C2_Init();
   MX_USART1_UART_Init();
-  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
-  /* Initialize the peripherals */
+  /* Initialize the sensor peripherals */
+
   BSP_HSENSOR_Init();
   BSP_MAGNETO_Init();
   BSP_ACCELERO_Init();
   BSP_PSENSOR_Init();
 
+  mode = 0;
+
   /* USER CODE END 2 */
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* definition and creation of readSensor */
+  osThreadDef(readSensor, StartDefaultTask, osPriorityNormal, 0, 256);
+  readSensorHandle = osThreadCreate(osThread(readSensor), NULL);
+
+  /* definition and creation of buttonCheck */
+  osThreadDef(buttonCheck, StartTask02, osPriorityHigh, 0, 128);
+  buttonCheckHandle = osThreadCreate(osThread(buttonCheck), NULL);
+
+  /* definition and creation of printUART */
+  osThreadDef(printUART, StartTask03, osPriorityLow, 0, 256);
+  printUARTHandle = osThreadCreate(osThread(printUART), NULL);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -121,6 +175,9 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+
+
   }
   /* USER CODE END 3 */
 }
@@ -224,51 +281,6 @@ static void MX_I2C2_Init(void)
 }
 
 /**
-  * @brief TIM2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM2_Init(void)
-{
-
-  /* USER CODE BEGIN TIM2_Init 0 */
-
-  /* USER CODE END TIM2_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM2_Init 1 */
-
-  /* USER CODE END TIM2_Init 1 */
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 0;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 4294967295;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM2_Init 2 */
-
-  /* USER CODE END TIM2_Init 2 */
-
-}
-
-/**
   * @brief USART1 Initialization Function
   * @param None
   * @retval None
@@ -323,11 +335,33 @@ static void MX_USART1_UART_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 /* USER CODE BEGIN MX_GPIO_Init_1 */
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(myLed1_GPIO_Port, myLed1_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : myButton_Pin */
+  GPIO_InitStruct.Pin = myButton_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(myButton_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : myLed1_Pin */
+  GPIO_InitStruct.Pin = myLed1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(myLed1_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -335,20 +369,158 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-/* Set up Timer interrupts */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef * htim) {
-	if (htim == &htim2) {
+void printOne(char* string, float data) {
+	char output[120];
+	sprintf(output, string, (int) data);
+	uint16_t len = strlen(output);
+	HAL_UART_Transmit(&huart1, (uint8_t *)output, len, 120);
+}
+
+void printThree(char* string, int data1, int data2, int data3) {
+	char output[60];
+	sprintf(output, string, data1, data2, data3);
+	uint16_t len = strlen(output);
+	HAL_UART_Transmit(&huart1, (uint8_t *)output, len, 120);
+}
+
+/* Read sensor and print values */
+void readSensors() {
+	if (mode == 0) {
 		humidity = BSP_HSENSOR_ReadHumidity();
+	}
+	else if (mode == 1) {
 		BSP_MAGNETO_GetXYZ(magneticfield);
+	}
+	else if (mode == 2) {
 		BSP_ACCELERO_AccGetXYZ(acceleration);
+	}
+	else {
 		pressure = BSP_PSENSOR_ReadPressure();
-
-
-
 	}
 }
 
+/* Function to printer sensor values */
+void printSensors() {
+	if (mode == 0) {
+			printOne("Humidity: %d\n\r", humidity);
+		}
+		else if (mode == 1) {
+			printThree("Magnetic Field X, Y, Z Coordinate: %d, %d, %d\n\r", magneticfield[0], magneticfield[1], magneticfield[2]);
+		}
+		else if (mode == 2) {
+			printThree("Acceleration X, Y, Z Coordinate: %d, %d, %d\n\r", acceleration[0], acceleration[1], acceleration[2]);
+		}
+		else {
+			printOne("Pressure: %d\n\r", pressure);
+	}
+
+}
+
+/* Read Button Using Interrupt flag */
+void readButton() {
+	if (buttonPressed) {
+		buttonPressed = 0; // Reset the flag
+		mode = (mode + 1) % 4; // Update the mode
+	}
+}
+
+
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
+{
+    // Report stack overflow
+    printf("Stack overflow detected in task: %s\n", pcTaskName);
+
+    // Optionally halt the system for debugging
+    while (1);
+}
+
+
+
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_StartDefaultTask */
+/**
+  * @brief  Function implementing the readSensor thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartDefaultTask */
+void StartDefaultTask(void const * argument)
+{
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
+  {
+	osDelay(100);
+	readSensors();
+  }
+  /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_StartTask02 */
+/**
+* @brief Function implementing the buttonCheck thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTask02 */
+void StartTask02(void const * argument)
+{
+  /* USER CODE BEGIN StartTask02 */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(400);
+    readButton();
+  }
+  /* USER CODE END StartTask02 */
+}
+
+/* USER CODE BEGIN Header_StartTask03 */
+/**
+* @brief Function implementing the printUART thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTask03 */
+void StartTask03(void const * argument)
+{
+  /* USER CODE BEGIN StartTask03 */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(200);
+    printSensors();
+  }
+  /* USER CODE END StartTask03 */
+}
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+    if (GPIO_Pin == myButton_Pin) {
+        buttonPressed = 1; // Set the flag
+    }
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
